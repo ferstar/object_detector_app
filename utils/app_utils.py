@@ -1,11 +1,12 @@
 # From http://www.pyimagesearch.com/2015/12/21/increasing-webcam-fps-with-python-and-opencv/
 
-import struct
-import six
 import collections
-import cv2
 import datetime
+import struct
 from threading import Thread
+
+import cv2
+import six
 from matplotlib import colors
 
 
@@ -15,7 +16,7 @@ class FPS:
         # that were examined between the start and end intervals
         self._start = None
         self._end = None
-        self._numFrames = 0
+        self.numFrames = 0
 
     def start(self):
         # start the timer
@@ -29,7 +30,7 @@ class FPS:
     def update(self):
         # increment the total number of frames examined during the
         # start and end intervals
-        self._numFrames += 1
+        self.numFrames += 1
 
     def elapsed(self):
         # return the total number of seconds between the start and
@@ -38,7 +39,7 @@ class FPS:
 
     def fps(self):
         # compute the (approximate) frames per second
-        return self._numFrames / self.elapsed()
+        return self.numFrames / self.elapsed()
 
 
 class WebcamVideoStream:
@@ -67,7 +68,7 @@ class WebcamVideoStream:
                 return
 
             # otherwise, read the next frame from the stream
-            (self.grabbed, self.frame) = self.stream.read()
+            self.grabbed, self.frame = self.stream.read()
 
     def read(self):
         # return the frame most recently read
@@ -191,3 +192,4 @@ def draw_boxes_and_labels(
         class_names.append(box_to_display_str_map[box])
         class_colors.append(color_rgb[color.lower()])
     return rect_points, class_names, class_colors
+

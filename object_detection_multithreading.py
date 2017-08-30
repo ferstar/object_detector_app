@@ -53,6 +53,7 @@ def detect_objects(image_np, sess, detection_graph):
         classes=np.squeeze(classes).astype(np.int32),
         scores=np.squeeze(scores),
         category_index=category_index,
+        max_boxes_to_draw=1,
         min_score_thresh=.5
     )
     return dict(rect_points=rect_points, class_names=class_names, class_colors=class_colors)
@@ -85,13 +86,15 @@ if __name__ == '__main__':
     parser.add_argument('-src', '--source', dest='video_source', type=int,
                         default=0, help='Device index of the camera.')
     parser.add_argument('-wd', '--width', dest='width', type=int,
-                        default=480, help='Width of the frames in the video stream.')
+                        default=800, help='Width of the frames in the video stream.')
     parser.add_argument('-ht', '--height', dest='height', type=int,
-                        default=360, help='Height of the frames in the video stream.')
+                        default=600, help='Height of the frames in the video stream.')
+    parser.add_argument('-q-size', '--queue-size', dest='queue_size', type=int,
+                        default=5, help='Size of the queue.')
     args = parser.parse_args()
 
-    input_q = Queue(5)  # fps is better if queue is higher but then more lags
-    output_q = Queue()
+    input_q = Queue(maxsize=args.queue_size)
+    output_q = Queue(maxsize=args.queue_size)
     for i in range(1):
         t = Thread(target=worker, args=(input_q, output_q))
         t.daemon = True
@@ -101,15 +104,17 @@ if __name__ == '__main__':
                                       width=args.width,
                                       height=args.height).start()
     fps = FPS().start()
-
     while True:
-        frame = video_capture.read()
-        input_q.put(frame)
+        # 图像水平翻转
+        frame = cv2.flip(video_capture.read(), 1)
+        fps.update()
+        if fps.numFrames % 5 == 0:
+            input_q.put(frame)
 
         t = time.time()
 
         if output_q.empty():
-            pass  # fill up queue
+            continue
         else:
             font = cv2.FONT_HERSHEY_SIMPLEX
             data = output_q.get()
@@ -117,16 +122,21 @@ if __name__ == '__main__':
             class_names = data['class_names']
             class_colors = data['class_colors']
             for point, name, color in zip(rec_points, class_names, class_colors):
-                cv2.rectangle(frame, (int(point['xmin'] * args.width), int(point['ymin'] * args.height)),
-                              (int(point['xmax'] * args.width), int(point['ymax'] * args.height)), color, 3)
-                cv2.rectangle(frame, (int(point['xmin'] * args.width), int(point['ymin'] * args.height)),
-                              (int(point['xmin'] * args.width) + len(name[0]) * 6,
-                               int(point['ymin'] * args.height) - 10), color, -1, cv2.LINE_AA)
-                cv2.putText(frame, name[0], (int(point['xmin'] * args.width), int(point['ymin'] * args.height)), font,
-                            0.3, (0, 0, 0), 1)
-            cv2.imshow('Video', frame)
+                cv2.ellipse(frame, (int((point['xmax'] + point['xmin']) * args.width / 2),
+                                    int((point['ymax'] + point['ymin']) * args.height / 2)),
+                            (int((point['xmax'] - point['xmin']) * args.width / 2),
+                             int((point['ymax'] - point['ymin']) * args.height / 2)),
+                            0, 0, 360, color, 3)
 
-        fps.update()
+                cv2.rectangle(frame, (int((point['xmax'] + point['xmin']) * args.width / 2) - len(name[0]) * 3,
+                                      int(point['ymin'] * args.height) - 10),
+                              (int((point['xmax'] + point['xmin']) * args.width / 2) + len(name[0]) * 3,
+                               int(point['ymin'] * args.height) - 20), color, -1, cv2.LINE_AA)
+                cv2.putText(frame, name[0], (int((point['xmax'] + point['xmin']) * args.width / 2) - len(name[0]) * 3,
+                                             int(point['ymin'] * args.height) - 10), font,
+                            0.3, (0, 0, 0), 1)
+        cv2.imshow('Video', frame)
+
 
         print('[INFO] elapsed time: {:.2f}'.format(time.time() - t))
 
@@ -139,3 +149,4 @@ if __name__ == '__main__':
 
     video_capture.stop()
     cv2.destroyAllWindows()
+
